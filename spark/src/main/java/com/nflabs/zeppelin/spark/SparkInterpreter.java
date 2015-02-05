@@ -78,7 +78,6 @@ public class SparkInterpreter extends Interpreter {
                 getSystemDefault(null, "spark.cores.max", ""),
                 "total number of cores to use. Empty value uses all available core")
             .add("args", "", "spark commandline args").build());
-
   }
 
   private ZeppelinContext z;
@@ -101,13 +100,26 @@ public class SparkInterpreter extends Interpreter {
     out = new ByteArrayOutputStream();
   }
 
+  public SparkInterpreter(Properties property,
+                          SparkContext sc,
+                          SparkILoop sparkILoop,
+                          ByteArrayOutputStream out) {
+    super(property);
+    this.sc = sc;
+    this.interpreter = sparkILoop;
+    this.out = out;
+    env = SparkEnv.get();
+    sparkListener = new JobProgressListener(sc.getConf());
+    sc.listenerBus().addListener(sparkListener);
+  }
 
   public synchronized SparkContext getSparkContext() {
     if (sc == null) {
-      sc = createSparkContext();
-      env = SparkEnv.get();
-      sparkListener = new JobProgressListener(sc.getConf());
-      sc.listenerBus().addListener(sparkListener);
+      System.err.println("spark context is null");
+//      sc = createSparkContext();
+//      env = SparkEnv.get();
+//      sparkListener = new JobProgressListener(sc.getConf());
+//      sc.listenerBus().addListener(sparkListener);
     }
     return sc;
   }
@@ -126,43 +138,50 @@ public class SparkInterpreter extends Interpreter {
     return dep;
   }
 
-  public SparkContext createSparkContext() {
-    System.err.println("------ Create new SparkContext " + getProperty("master") + " -------");
-
-    String execUri = System.getenv("SPARK_EXECUTOR_URI");
-    String[] jars = SparkILoop.getAddedJars();
-    SparkConf conf =
-        new SparkConf()
-            .setMaster(getProperty("master"))
-            .setAppName(getProperty("spark.app.name"))
-            .setJars(jars)
-            .set("spark.repl.class.uri", interpreter.intp().classServer().uri());
-
-    if (execUri != null) {
-      conf.set("spark.executor.uri", execUri);
-    }
-    if (System.getenv("SPARK_HOME") != null) {
-      conf.setSparkHome(System.getenv("SPARK_HOME"));
-    }
-    conf.set("spark.scheduler.mode", "FAIR");
-
-    Properties intpProperty = getProperty();
-
-    for (Object k : intpProperty.keySet()) {
-      String key = (String) k;
-      if (key.startsWith("spark.")) {
-        Object value = intpProperty.get(key);
-        if (value != null
-            && value instanceof String
-            && !((String) value).trim().isEmpty()) {
-          conf.set(key, (String) value);
-        }
-      }
-    }
-
-    SparkContext sparkContext = new SparkContext(conf);
-    return sparkContext;
+  public void setSparkContext(SparkContext sc) {
+    this.sc = sc;
+    env = SparkEnv.get();
+    sparkListener = new JobProgressListener(sc.getConf());
+    sc.listenerBus().addListener(sparkListener);
   }
+
+//  private SparkContext createSparkContext() {
+//    System.err.println("------ Create new SparkContext " + getProperty("master") + " -------");
+//
+//    String execUri = System.getenv("SPARK_EXECUTOR_URI");
+//    String[] jars = SparkILoop.getAddedJars();
+//    SparkConf conf =
+//        new SparkConf()
+//            .setMaster(getProperty("master"))
+//            .setAppName(getProperty("spark.app.name"))
+//            .setJars(jars)
+//            .set("spark.repl.class.uri", interpreter.intp().classServer().uri());
+//
+//    if (execUri != null) {
+//      conf.set("spark.executor.uri", execUri);
+//    }
+//    if (System.getenv("SPARK_HOME") != null) {
+//      conf.setSparkHome(System.getenv("SPARK_HOME"));
+//    }
+//    conf.set("spark.scheduler.mode", "FAIR");
+//
+//    Properties intpProperty = getProperty();
+//
+//    for (Object k : intpProperty.keySet()) {
+//      String key = (String) k;
+//      if (key.startsWith("spark.")) {
+//        Object value = intpProperty.get(key);
+//        if (value != null
+//            && value instanceof String
+//            && !((String) value).trim().isEmpty()) {
+//          conf.set(key, (String) value);
+//        }
+//      }
+//    }
+//
+//    SparkContext sparkContext = new SparkContext(conf);
+//    return sparkContext;
+//  }
 
   private static String getSystemDefault(
       String envName,
@@ -187,7 +206,7 @@ public class SparkInterpreter extends Interpreter {
 
   @Override
   public void open() {
-    URL[] urls = getClassloaderUrls();
+//    URL[] urls = getClassloaderUrls();
 
     // Very nice discussion about how scala compiler handle classpath
     // https://groups.google.com/forum/#!topic/scala-user/MlVwo2xCCI0
@@ -202,62 +221,66 @@ public class SparkInterpreter extends Interpreter {
      * val in = new Interpreter(settings) { >> override protected def parentClassLoader =
      * getClass.getClassLoader >> } >> in.setContextClassLoader()
      */
-    Settings settings = new Settings();
-    if (getProperty("args") != null) {
-      String[] argsArray = getProperty("args").split(" ");
-      LinkedList<String> argList = new LinkedList<String>();
-      for (String arg : argsArray) {
-        argList.add(arg);
-      }
+//    Settings settings = new Settings();
+//    if (getProperty("args") != null) {
+//      String[] argsArray = getProperty("args").split(" ");
+//      LinkedList<String> argList = new LinkedList<String>();
+//      for (String arg : argsArray) {
+//        argList.add(arg);
+//      }
+//
+//      SparkCommandLine command =
+//          new SparkCommandLine(scala.collection.JavaConversions.asScalaBuffer(
+//              argList).toList());
+//      settings = command.settings();
+//    }
+//
+//    // set classpath for scala compiler
+//    PathSetting pathSettings = settings.classpath();
+//    String classpath = "";
+//    List<File> paths = currentClassPath();
+//    for (File f : paths) {
+//      if (classpath.length() > 0) {
+//        classpath += File.pathSeparator;
+//      }
+//      classpath += f.getAbsolutePath();
+//    }
+//
+//    if (urls != null) {
+//      for (URL u : urls) {
+//        if (classpath.length() > 0) {
+//          classpath += File.pathSeparator;
+//        }
+//        classpath += u.getFile();
+//      }
+//    }
 
-      SparkCommandLine command =
-          new SparkCommandLine(scala.collection.JavaConversions.asScalaBuffer(
-              argList).toList());
-      settings = command.settings();
-    }
-
-    // set classpath for scala compiler
-    PathSetting pathSettings = settings.classpath();
-    String classpath = "";
-    List<File> paths = currentClassPath();
-    for (File f : paths) {
-      if (classpath.length() > 0) {
-        classpath += File.pathSeparator;
-      }
-      classpath += f.getAbsolutePath();
-    }
-
-    if (urls != null) {
-      for (URL u : urls) {
-        if (classpath.length() > 0) {
-          classpath += File.pathSeparator;
-        }
-        classpath += u.getFile();
-      }
-    }
-
-    pathSettings.v_$eq(classpath);
-    settings.scala$tools$nsc$settings$ScalaSettings$_setter_$classpath_$eq(pathSettings);
+//    pathSettings.v_$eq(classpath);
+//    settings.scala$tools$nsc$settings$ScalaSettings$_setter_$classpath_$eq(pathSettings);
 
 
     // set classloader for scala compiler
-    settings.explicitParentLoader_$eq(new Some<ClassLoader>(Thread.currentThread()
-        .getContextClassLoader()));
-    BooleanSetting b = (BooleanSetting) settings.usejavacp();
-    b.v_$eq(true);
-    settings.scala$tools$nsc$settings$StandardScalaSettings$_setter_$usejavacp_$eq(b);
+//    settings.explicitParentLoader_$eq(new Some<ClassLoader>(Thread.currentThread()
+//        .getContextClassLoader()));
+//    BooleanSetting b = (BooleanSetting) settings.usejavacp();
+//    b.v_$eq(true);
+//    settings.scala$tools$nsc$settings$StandardScalaSettings$_setter_$usejavacp_$eq(b);
 
     PrintStream printStream = new PrintStream(out);
 
     /* spark interpreter */
-    this.interpreter = new SparkILoop(null, new PrintWriter(out));
-    interpreter.settings_$eq(settings);
+    if (this.interpreter == null) {
+      System.err.println("SparkILoop is null");
+//      this.interpreter = new SparkILoop(null, new PrintWriter(out));
+//      interpreter.settings_$eq(settings);
+//      interpreter.createInterpreter();
+//      this.interpreter.loadFiles(settings);
+    }
 
-    interpreter.createInterpreter();
 
     intp = interpreter.intp();
-    intp.setContextClassLoader();
-    intp.initializeSynchronous();
+//    intp.setContextClassLoader();
+//    intp.initializeSynchronous();
 
     completor = new SparkJLineCompletion(intp);
 
@@ -268,7 +291,6 @@ public class SparkInterpreter extends Interpreter {
 
     z = new ZeppelinContext(sc, sqlc, null, dep, printStream);
 
-    this.interpreter.loadFiles(settings);
 
     intp.interpret("@transient var _binder = new java.util.HashMap[String, Object]()");
     binder = (Map<String, Object>) getValue("_binder");

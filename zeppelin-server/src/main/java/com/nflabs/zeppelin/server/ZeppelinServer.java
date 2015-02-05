@@ -260,11 +260,19 @@ public class ZeppelinServer extends Application {
   }
 
   public ZeppelinServer() throws Exception {
+    this(null, null, null);
+  }
+
+  public ZeppelinServer(Object sparkContext,
+                        Object sparkILoop,
+                        Object byteArrayOutputStream) throws Exception {
     ZeppelinConfiguration conf = ZeppelinConfiguration.create();
 
     this.schedulerFactory = new SchedulerFactory();
 
-    this.replFactory = new InterpreterFactory(conf);
+    this.replFactory =
+        new InterpreterFactory(conf, sparkContext, sparkILoop, byteArrayOutputStream);
+
     notebook = new Notebook(conf, schedulerFactory, replFactory, notebookServer);
   }
 

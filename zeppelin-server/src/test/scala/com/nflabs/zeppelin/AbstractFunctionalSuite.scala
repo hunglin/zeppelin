@@ -8,7 +8,7 @@ import org.openqa.selenium.safari.SafariDriver
 import org.scalatest.concurrent.Eventually._
 import org.scalatest.time._
 import org.scalatest.selenium.WebBrowser
-import org.scalatest.{BeforeAndAfterAll, FunSuite, Suite}
+import org.scalatest.{DoNotDiscover, BeforeAndAfterAll, FunSuite, Suite}
 
 import scala.sys.process._
 import scala.util.Try
@@ -17,6 +17,7 @@ object AbstractFunctionalSuite {
   val SERVER_ADDRESS = "http://localhost:8080"
 }
 
+@DoNotDiscover
 class AbstractFunctionalSuite extends FunSuite with WebBrowser with BeforeAndAfterAll {
 
   implicit val webDriver = getDriver()
