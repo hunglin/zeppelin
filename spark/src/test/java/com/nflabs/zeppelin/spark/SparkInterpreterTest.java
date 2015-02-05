@@ -107,7 +107,7 @@ public class SparkInterpreterTest {
 		System.out.println("msg="+result.message());
 	}
 
-	private SparkContext createSparkContext(SparkILoop interpreter) {
+	static public SparkContext createSparkContext(SparkILoop interpreter) {
 		System.err.println("------ in test Create new SparkContext " + getProperty("master") + " -------");
 
 		String execUri = System.getenv("SPARK_EXECUTOR_URI");
@@ -145,7 +145,7 @@ public class SparkInterpreterTest {
 		return sparkContext;
 	}
 
-	private SparkILoop createSparkILoop(ByteArrayOutputStream out) {
+	static public SparkILoop createSparkILoop(ByteArrayOutputStream out) {
 		SparkILoop sparkILoop = new SparkILoop(null, new PrintWriter(out));
 		Settings settings = createSettings();
 		sparkILoop.settings_$eq(settings);
@@ -157,26 +157,20 @@ public class SparkInterpreterTest {
 		return sparkILoop;
 	}
 
-	private Settings createSettings() {
+	static private Settings createSettings() {
 		Settings settings = new Settings();
-//		if (getProperty("args") != null) {
-//			String[] argsArray = getProperty("args").split(" ");
-//			LinkedList<String> argList = new LinkedList<String>();
-//			for (String arg : argsArray) {
-//				argList.add(arg);
-//			}
-//
-//			SparkCommandLine command =
-//					new SparkCommandLine(scala.collection.JavaConversions.asScalaBuffer(
-//							argList).toList());
-//			settings = command.settings();
-//		}
+		if (getProperty("args") != null) {
+			String[] argsArray = getProperty("args").split(" ");
+			LinkedList<String> argList = new LinkedList<>();
+			for (String arg : argsArray) {
+				argList.add(arg);
+			}
 
-		LinkedList<String> argList = new LinkedList<>();
-		SparkCommandLine command =
-				new SparkCommandLine(scala.collection.JavaConversions.asScalaBuffer(
-						argList).toList());
-		settings = command.settings();
+			SparkCommandLine command =
+					new SparkCommandLine(scala.collection.JavaConversions.asScalaBuffer(
+							argList).toList());
+			settings = command.settings();
+		}
 
 		PathSetting pathSettings = settings.classpath();
 		String classpath = "";
@@ -209,7 +203,7 @@ public class SparkInterpreterTest {
 		return settings;
 	}
 
-	private List<File> currentClassPath() {
+	static private List<File> currentClassPath() {
 		List<File> paths = classPath(Thread.currentThread().getContextClassLoader());
 		String[] cps = System.getProperty("java.class.path").split(File.pathSeparator);
 		if (cps != null) {
@@ -220,7 +214,7 @@ public class SparkInterpreterTest {
 		return paths;
 	}
 
-	private List<File> classPath(ClassLoader cl) {
+	static private List<File> classPath(ClassLoader cl) {
 		List<File> paths = new LinkedList<File>();
 		if (cl == null) {
 			return paths;
@@ -239,7 +233,13 @@ public class SparkInterpreterTest {
 	}
 
 
-	private String getProperty(String key) {
+	static private String getProperty(String key) {
+		try {
+			Class.forName("com.nflabs.zeppelin.spark.SparkInterpreter");
+			Class.forName("com.nflabs.zeppelin.spark.SparkSqlInterpreter");
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
 		Map<String, InterpreterProperty> defaultProperties = Interpreter
 				.findRegisteredInterpreterByClassName("com.nflabs.zeppelin.spark.SparkInterpreter")
 				.getProperties();
