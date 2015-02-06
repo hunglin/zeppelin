@@ -2,8 +2,11 @@ package com.nflabs.zeppelin.spark;
 
 import static org.junit.Assert.assertEquals;
 
+import java.io.ByteArrayOutputStream;
 import java.util.Properties;
 
+import org.apache.spark.SparkContext;
+import org.apache.spark.repl.SparkILoop;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,7 +30,10 @@ public class SparkSqlInterpreterTest {
 		if (repl == null) {
 
 		  if (SparkInterpreterTest.repl == null) {
-		    repl = new SparkInterpreter(p);
+				ByteArrayOutputStream out = new ByteArrayOutputStream();
+				SparkILoop sparkILoop = SparkInterpreterTest.createSparkILoop(out);
+				SparkContext sc = SparkInterpreterTest.createSparkContext(sparkILoop);
+				repl = new SparkInterpreter(p, sc, sparkILoop, out);
 		    repl.open();
 		    SparkInterpreterTest.repl = repl;
 		  } else {

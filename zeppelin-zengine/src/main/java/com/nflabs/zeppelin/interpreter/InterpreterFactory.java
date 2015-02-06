@@ -53,8 +53,26 @@ public class InterpreterFactory {
 
   private Gson gson;
 
-  public InterpreterFactory(ZeppelinConfiguration conf) throws InterpreterException, IOException {
+  private Object sparkContext;
+  private Object sparkILoop;
+  private Object byteArrayOutputStream;
+
+  public InterpreterFactory(ZeppelinConfiguration conf)
+      throws InterpreterException, IOException {
+    this(conf, null, null, null);
+  }
+
+  public InterpreterFactory(ZeppelinConfiguration conf,
+                            Object sparkContext,
+                            Object sparkILoop,
+                            Object byteArrayOutputStream)
+      throws InterpreterException, IOException {
+
     this.conf = conf;
+    this.sparkContext = sparkContext;
+    this.sparkILoop = sparkILoop;
+    this.byteArrayOutputStream = byteArrayOutputStream;
+
     String replsConf = conf.getString(ConfVars.ZEPPELIN_INTERPRETERS);
     interpreterClassList = replsConf.split(",");
 
@@ -65,7 +83,6 @@ public class InterpreterFactory {
 
     init();
   }
-
 
   private void init() throws InterpreterException, IOException {
     ClassLoader oldcl = Thread.currentThread().getContextClassLoader();
@@ -497,7 +514,14 @@ public class InterpreterFactory {
       Class<Interpreter> replClass = (Class<Interpreter>) cl.loadClass(className);
       Constructor<Interpreter> constructor =
           replClass.getConstructor(new Class[] {Properties.class});
-      Interpreter repl = constructor.newInstance(property);
+      Interpreter repl;
+
+      if (sparkContext != null && className.equals("com.nflabs.zeppelin.spark.SparkInterpreter"))
+        repl = constructor.newInstance(property, sparkContext, sparkILoop, byteArrayOutputStream);
+      else
+        repl = constructor.newInstance(property);
+
+
       repl.setClassloaderUrls(ccl.getURLs());
       LazyOpenInterpreter intp = new LazyOpenInterpreter(
           new ClassloaderInterpreter(repl, cl));

@@ -3,8 +3,22 @@ package com.nflabs.zeppelin.spark;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.PrintWriter;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
+import com.nflabs.zeppelin.interpreter.Interpreter;
+import com.nflabs.zeppelin.interpreter.InterpreterProperty;
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
+import org.apache.spark.repl.SparkCommandLine;
+import org.apache.spark.repl.SparkILoop;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -13,6 +27,10 @@ import com.nflabs.zeppelin.interpreter.InterpreterContext;
 import com.nflabs.zeppelin.interpreter.InterpreterResult;
 import com.nflabs.zeppelin.interpreter.InterpreterResult.Code;
 import com.nflabs.zeppelin.notebook.Paragraph;
+import scala.Some;
+import scala.tools.nsc.Settings;
+import scala.tools.nsc.settings.MutableSettings;
+import scala.tools.nsc.settings.MutableSettings.PathSetting;
 
 
 public class SparkInterpreterTest {
@@ -24,7 +42,10 @@ public class SparkInterpreterTest {
 	  if (repl == null) {
 		  Properties p = new Properties();
 
-	    repl = new SparkInterpreter(p);
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			SparkILoop sparkILoop = createSparkILoop(out);
+
+	    repl = new SparkInterpreter(p, createSparkContext(sparkILoop), sparkILoop, out);
   	  repl.open();
 	  }
 
@@ -65,7 +86,10 @@ public class SparkInterpreterTest {
 
 		// create new interpreter
 		Properties p = new Properties();
-		SparkInterpreter repl2 = new SparkInterpreter(p);
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		SparkILoop sparkILoop = createSparkILoop(out);
+		SparkInterpreter repl2 =
+				new SparkInterpreter(p, createSparkContext(sparkILoop), sparkILoop, out);
 		repl2.open();
 
 		repl.interpret("case class Man(name:String, age:Int)", context);
@@ -81,5 +105,148 @@ public class SparkInterpreterTest {
                        "}", context);
 		assertEquals(Code.ERROR, result.code());
 		System.out.println("msg="+result.message());
+	}
+
+	static public SparkContext createSparkContext(SparkILoop interpreter) {
+		System.err.println("------ in test Create new SparkContext " + getProperty("master") + " -------");
+
+		String execUri = System.getenv("SPARK_EXECUTOR_URI");
+		String[] jars = SparkILoop.getAddedJars();
+		SparkConf conf =
+				new SparkConf()
+						.setMaster(getProperty("master"))
+						.setAppName(getProperty("spark.app.name"))
+						.setJars(jars)
+						.set("spark.repl.class.uri", interpreter.intp().classServer().uri());
+
+		if (execUri != null) {
+			conf.set("spark.executor.uri", execUri);
+		}
+		if (System.getenv("SPARK_HOME") != null) {
+			conf.setSparkHome(System.getenv("SPARK_HOME"));
+		}
+		conf.set("spark.scheduler.mode", "FAIR");
+
+		Properties intpProperty = new Properties();
+
+		for (Object k : intpProperty.keySet()) {
+			String key = (String) k;
+			if (key.startsWith("spark.")) {
+				Object value = intpProperty.get(key);
+				if (value != null
+						&& value instanceof String
+						&& !((String) value).trim().isEmpty()) {
+					conf.set(key, (String) value);
+				}
+			}
+		}
+
+		SparkContext sparkContext = new SparkContext(conf);
+		return sparkContext;
+	}
+
+	static public SparkILoop createSparkILoop(ByteArrayOutputStream out) {
+		SparkILoop sparkILoop = new SparkILoop(null, new PrintWriter(out));
+		Settings settings = createSettings();
+		sparkILoop.settings_$eq(settings);
+		sparkILoop.createInterpreter();
+		sparkILoop.loadFiles(settings);
+		sparkILoop.intp().setContextClassLoader();
+		sparkILoop.intp().initializeSynchronous();
+
+		return sparkILoop;
+	}
+
+	static private Settings createSettings() {
+		Settings settings = new Settings();
+		if (getProperty("args") != null) {
+			String[] argsArray = getProperty("args").split(" ");
+			LinkedList<String> argList = new LinkedList<>();
+			for (String arg : argsArray) {
+				argList.add(arg);
+			}
+
+			SparkCommandLine command =
+					new SparkCommandLine(scala.collection.JavaConversions.asScalaBuffer(
+							argList).toList());
+			settings = command.settings();
+		}
+
+		PathSetting pathSettings = settings.classpath();
+		String classpath = "";
+		List<File> paths = currentClassPath();
+		for (File f : paths) {
+			if (classpath.length() > 0) {
+				classpath += File.pathSeparator;
+			}
+			classpath += f.getAbsolutePath();
+		}
+
+		/* commented out since urls is null */
+//		if (urls != null) {
+//			for (URL u : urls) {
+//				if (classpath.length() > 0) {
+//					classpath += File.pathSeparator;
+//				}
+//				classpath += u.getFile();
+//			}
+//		}
+
+		pathSettings.v_$eq(classpath);
+		settings.scala$tools$nsc$settings$ScalaSettings$_setter_$classpath_$eq(pathSettings);
+		settings.explicitParentLoader_$eq(new Some<ClassLoader>(Thread.currentThread()
+				.getContextClassLoader()));
+		MutableSettings.BooleanSetting b = (MutableSettings.BooleanSetting) settings.usejavacp();
+		b.v_$eq(true);
+		settings.scala$tools$nsc$settings$StandardScalaSettings$_setter_$usejavacp_$eq(b);
+
+		return settings;
+	}
+
+	static private List<File> currentClassPath() {
+		List<File> paths = classPath(Thread.currentThread().getContextClassLoader());
+		String[] cps = System.getProperty("java.class.path").split(File.pathSeparator);
+		if (cps != null) {
+			for (String cp : cps) {
+				paths.add(new File(cp));
+			}
+		}
+		return paths;
+	}
+
+	static private List<File> classPath(ClassLoader cl) {
+		List<File> paths = new LinkedList<File>();
+		if (cl == null) {
+			return paths;
+		}
+
+		if (cl instanceof URLClassLoader) {
+			URLClassLoader ucl = (URLClassLoader) cl;
+			URL[] urls = ucl.getURLs();
+			if (urls != null) {
+				for (URL url : urls) {
+					paths.add(new File(url.getFile()));
+				}
+			}
+		}
+		return paths;
+	}
+
+
+	static private String getProperty(String key) {
+		try {
+			Class.forName("com.nflabs.zeppelin.spark.SparkInterpreter");
+			Class.forName("com.nflabs.zeppelin.spark.SparkSqlInterpreter");
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		Map<String, InterpreterProperty> defaultProperties = Interpreter
+				.findRegisteredInterpreterByClassName("com.nflabs.zeppelin.spark.SparkInterpreter")
+				.getProperties();
+		if (defaultProperties.containsKey(key)) {
+			return defaultProperties.get(key).getDefaultValue();
+		}
+
+		return null;
 	}
 }
